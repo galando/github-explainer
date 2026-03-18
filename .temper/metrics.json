@@ -1,0 +1,31 @@
+{
+  "project": "github-explainer",
+  "lastUpdated": "2026-03-18T20:57:00Z",
+  "sessions": [
+    {
+      "date": "2026-03-18",
+      "type": "production-setup",
+      "filesCreated": 8,
+      "filesModified": 2,
+      "lintErrors": 8,
+      "lintWarnings": 15,
+      "typeErrors": 0,
+      "securityIssues": 0,
+      "buildTimeMs": 5080,
+      "bundleSizeKB": 560,
+      "coverage": null,
+      "reviewScore": 95
+    }
+  ],
+  "aggregates": {
+    "totalReviews": 1,
+    "avgReviewScore": 95,
+    "totalIssuesFound": 4,
+    "totalIssuesFixed": 2,
+    "totalIssuesDeferred": 2
+  },
+  "trends": {
+    "qualityDirection": "stable",
+    "debtDirection": "neutral"
+  }
+}
