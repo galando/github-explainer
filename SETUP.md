@@ -42,7 +42,7 @@ npm install
 3. You will need a GitHub OAuth App — go to https://github.com/settings/developers
 4. Click **New OAuth App** and fill in:
    - Application name: `GitHub Explainer`
-   - Homepage URL: `https://your-vercel-domain.vercel.app`
+   - Homepage URL: `https://repoxplain.nl`
    - Authorization callback URL: `https://xxxx.supabase.co/auth/v1/callback`
      (replace `xxxx` with your actual Supabase project ref)
 5. Click **Register application**
@@ -165,7 +165,6 @@ Edit `.env` and fill in your values:
 VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 VITE_GITHUB_CLIENT_ID=your_github_oauth_client_id
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
 Notes:
@@ -222,13 +221,11 @@ The `vercel.json` in this repo already handles SPA routing (all routes go to `in
 
 ## Step 10: Update Callback URLs
 
-After your Vercel deployment, you have a URL like `https://your-app.vercel.app`.
+After your Vercel deployment, update two places:
 
-Update two places:
+1. **GitHub OAuth App** (https://github.com/settings/developers): Ensure the Authorization callback URL is `https://xxxx.supabase.co/auth/v1/callback`.
 
-1. **GitHub OAuth App** (https://github.com/settings/developers): Change the Authorization callback URL to `https://xxxx.supabase.co/auth/v1/callback` (this should already be set correctly).
-
-2. **Supabase Auth settings** (Authentication > URL Configuration): Add your Vercel domain to the **Redirect URLs** list: `https://your-app.vercel.app/auth/callback`
+2. **Supabase Auth settings** (Authentication > URL Configuration): Add your domain to the **Redirect URLs** list: `https://repoxplain.nl/auth/callback`
 
 ---
 

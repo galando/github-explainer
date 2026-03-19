@@ -1,7 +1,7 @@
 # GitHub Explainer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Deploy](https://img.shields.io/github/deployments/galando/github-explainer/production?label=vercel)](https://github-explainer.vercel.app)
+[![Deploy](https://img.shields.io/github/deployments/galando/github-explainer/production?label=vercel)](https://repoxplain.nl)
 [![CI](https://github.com/galando/github-explainer/actions/workflows/ci.yml/badge.svg)](https://github.com/galando/github-explainer/actions/workflows/ci.yml)
 [![Supabase](https://img.shields.io/badge/Powered%20by-Supabase-3ECF8E)](https://supabase.com)
 
@@ -23,7 +23,7 @@ Paste a GitHub URL and get immediate insights into architecture, tech stack, key
 
 ## Quick Start
 
-Visit **[github-explainer.vercel.app](https://github-explainer.vercel.app)** and paste any GitHub URL:
+Visit **[repoxplain.nl](https://repoxplain.nl)** and paste any GitHub URL:
 
 ```
 github.com/facebook/react
@@ -36,10 +36,10 @@ facebook/react
 ```
 
 Try these examples:
-- [React](https://github-explainer.vercel.app/repo/facebook/react) — UI library
-- [Next.js](https://github-explainer.vercel.app/repo/vercel/next.js) — Full-stack framework
-- [FastAPI](https://github-explainer.vercel.app/repo/tiangolo/fastapi) — Python API framework
-- [Supabase](https://github-explainer.vercel.app/repo/supabase/supabase) — Backend platform
+- [React](https://repoxplain.nl/repo/facebook/react) — UI library
+- [Next.js](https://repoxplain.nl/repo/vercel/next.js) — Full-stack framework
+- [FastAPI](https://repoxplain.nl/repo/tiangolo/fastapi) — Python API framework
+- [Supabase](https://repoxplain.nl/repo/supabase/supabase) — Backend platform
 
 ## Tech Stack
 
@@ -69,7 +69,6 @@ See [SETUP.md](./SETUP.md) for complete setup instructions.
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_GITHUB_CLIENT_ID=your-github-client-id
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX  # optional
 ```
 
 ### Deploy to Vercel
