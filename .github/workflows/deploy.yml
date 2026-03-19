@@ -9,6 +9,8 @@ jobs:
   deploy-functions:
     name: Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -19,12 +21,24 @@ jobs:
         with:
           version: 2.20.5
 
+      - name: Verify secrets are set
+        run: |
+          if [ -z "${{ secrets.SUPABASE_PROJECT_REF }}" ]; then
+            echo "::error::SUPABASE_PROJECT_REF secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN secret is not set"
+            exit 1
+          fi
+          echo "✓ All required secrets are configured"
+
       - name: Deploy Edge Functions
         run: |
-          supabase functions deploy explain-code --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy github-auth --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy github-proxy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-          supabase functions deploy badge --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+          supabase functions deploy explain-code --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+          supabase functions deploy github-auth --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+          supabase functions deploy github-proxy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+          supabase functions deploy badge --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
