@@ -1,0 +1,5 @@
+# Local Supabase dev state — do not commit
+.branches
+.temp
+.env
+seed.sql
