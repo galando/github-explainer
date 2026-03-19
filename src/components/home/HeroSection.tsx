@@ -23,8 +23,8 @@ export default function HeroSection() {
     const trimmed = input.trim()
 
     const urlPatterns = [
-      /https?:\/\/github\.com\/([^\/]+)\/([^\/\s\?#]+)/,
-      /github\.com\/([^\/]+)\/([^\/\s\?#]+)/,
+      /https?:\/\/github\.com\/([^/]+)\/([^/\s?#]+)/,
+      /github\.com\/([^/]+)\/([^/\s?#]+)/,
     ]
 
     for (const pattern of urlPatterns) {

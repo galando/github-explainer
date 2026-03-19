@@ -125,12 +125,12 @@ function getFilesInFolder(tree: TreeItem[], folderName: string): string[] {
 
 export function ArchitectureDiagram({ tree }: ArchitectureDiagramProps) {
   const folders = buildFolderMap(tree)
+  const [activeLayer, setActiveLayer] = useState<LayerName | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<FolderInfo | null>(null)
 
   if (folders.length === 0) return null
 
   const layers = [...new Set(folders.map(f => f.layer))]
-  const [activeLayer, setActiveLayer] = useState<LayerName | null>(null)
-  const [selectedFolder, setSelectedFolder] = useState<FolderInfo | null>(null)
 
   const visibleFolders = activeLayer
     ? folders.filter(f => f.layer === activeLayer)
