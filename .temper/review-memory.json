@@ -1,0 +1,73 @@
+{
+  "project": "github-explainer",
+  "lastUpdated": "2026-03-18T20:57:00Z",
+  "patterns": [
+    {
+      "type": "documentation",
+      "pattern": "screenshot-placeholder",
+      "occurrences": 1,
+      "resolution": "Add HTML comment placeholder for future screenshot",
+      "firstSeen": "2026-03-18"
+    },
+    {
+      "type": "ci-cd",
+      "pattern": "cli-version-pinning",
+      "occurrences": 1,
+      "resolution": "Pin CLI versions to specific releases",
+      "firstSeen": "2026-03-18"
+    }
+  ],
+  "hotspots": [
+    {
+      "file": "src/components/home/HeroSection.tsx",
+      "issues": 8,
+      "types": ["regex-escape", "unused-import"]
+    },
+    {
+      "file": "src/components/repo/ArchitectureDiagram.tsx",
+      "issues": 2,
+      "types": ["conditional-hooks"]
+    },
+    {
+      "file": "src/pages/Comparison.tsx",
+      "issues": 4,
+      "types": ["unused-imports"]
+    }
+  ],
+  "resolvedIssues": [
+    {
+      "issue": "Missing screenshot in README",
+      "resolution": "Removed broken reference, added placeholder comment",
+      "date": "2026-03-18"
+    },
+    {
+      "issue": "CLI version: latest non-deterministic",
+      "resolution": "Pinned Supabase CLI to v2.20.5",
+      "date": "2026-03-18"
+    }
+  ],
+  "deferredIssues": [
+    {
+      "issue": "No test framework configured",
+      "reason": "Project has no tests yet",
+      "deferredDate": "2026-03-18"
+    },
+    {
+      "issue": "Actions not pinned to SHA",
+      "reason": "Optional for OSS projects",
+      "deferredDate": "2026-03-18"
+    }
+  ],
+  "learningLoop": [
+    {
+      "suggestion": "Add test framework (Vitest recommended for Vite projects)",
+      "priority": "medium",
+      "rationale": "CI pipeline missing test step"
+    },
+    {
+      "suggestion": "Consider code-splitting to reduce bundle size",
+      "priority": "low",
+      "rationale": "Bundle at 560KB exceeds 500KB recommendation"
+    }
+  ]
+}
