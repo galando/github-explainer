@@ -40,6 +40,29 @@ function buildContext(repoData: RepoData, analysis: RepoAnalysis): string {
     .map(c => c.commit.message.split('\n')[0])
     .join('; ')
 
+  // Build dependency context
+  let depContext = ''
+  if (analysis.dependencies) {
+    const topDeps = analysis.dependencies.production
+      .slice(0, 10)
+      .map(d => d.name)
+      .join(', ')
+    depContext = `\nMain dependencies: ${topDeps}`
+    if (analysis.dependencies.total > 10) {
+      depContext += ` (and ${analysis.dependencies.total - 10} more)`
+    }
+  }
+
+  // Build scripts context
+  let scriptContext = ''
+  if (analysis.scripts && Object.keys(analysis.scripts).length > 0) {
+    const scriptList = Object.entries(analysis.scripts)
+      .slice(0, 5)
+      .map(([k, v]) => `${k}: ${v.slice(0, 50)}${v.length > 50 ? '...' : ''}`)
+      .join('; ')
+    scriptContext = `\nNPM scripts: ${scriptList}`
+  }
+
   return `
 Repository: ${repo.full_name}
 Description: ${repo.description ?? 'No description'}
@@ -51,7 +74,7 @@ Architecture patterns: ${archList}
 File count: ${fileCount}
 Key files: ${topFiles}
 Contributors: ${contributors.length}
-Recent commits: ${recentCommits}
+Recent commits: ${recentCommits}${depContext}${scriptContext}
 `.trim()
 }
 
@@ -104,7 +127,7 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
   const [mode, setMode] = useState<ExplanationMode>('quick')
   const [explanations, setExplanations] = useState<Partial<Record<ExplanationMode, string>>>({})
   const [generatedAt, setGeneratedAt] = useState<Partial<Record<ExplanationMode, Date>>>({})
-  const [isLoading, setIsLoading] = useState(false)
+  const [loadingModes, setLoadingModes] = useState<Set<ExplanationMode>>(new Set())
   const [error, setError] = useState('')
   const [copied, setCopied] = useState<'badge' | 'summary' | 'link' | null>(null)
   const [, forceRender] = useState(0)
@@ -134,8 +157,8 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
 
   const fetchExplanation = async (m: ExplanationMode, force = false) => {
     if (m === 'readme') return  // README tab is static, no fetch needed
-    if (isLoading) return
-    setIsLoading(true)
+    if (loadingModes.has(m)) return
+    setLoadingModes(prev => new Set(prev).add(m))
     setError('')
 
     try {
@@ -163,7 +186,11 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get explanation.')
     } finally {
-      setIsLoading(false)
+      setLoadingModes(prev => {
+        const next = new Set(prev)
+        next.delete(m)
+        return next
+      })
     }
   }
 
@@ -304,7 +331,7 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
       {mode !== 'readme' && (
         <div className="min-h-[120px] p-5 pt-4">
           {/* Generated timestamp + refresh */}
-          {currentGeneratedAt && !isLoading && (
+          {currentGeneratedAt && !loadingModes.has(mode) && (
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-[--color-text-muted]">Generated {timeAgo(currentGeneratedAt)}</span>
               <button
@@ -323,22 +350,23 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
             </div>
           )}
 
-          {isLoading && (
-            <div className="flex items-center gap-3 p-4 bg-[--color-background] rounded-lg">
-              <div className="flex gap-1">
-                {[0, 1, 2].map(i => (
-                  <div
-                    key={i}
-                    className="w-2 h-2 rounded-full bg-[--color-accent-blue] animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
-              <span className="text-sm text-[--color-text-secondary]">Generating explanation...</span>
+          {loadingModes.has(mode) && (
+            <div
+              className="space-y-3 animate-pulse"
+              role="status"
+              aria-live="polite"
+              aria-label="Loading explanation"
+            >
+              <div className="h-4 bg-[--color-background] rounded w-3/4" />
+              <div className="h-4 bg-[--color-background] rounded w-full" />
+              <div className="h-4 bg-[--color-background] rounded w-5/6" />
+              <div className="h-4 bg-[--color-background] rounded w-2/3" />
+              <div className="h-4 bg-[--color-background] rounded w-4/5" />
+              <span className="sr-only">Loading...</span>
             </div>
           )}
 
-          {!isLoading && error && (
+          {!loadingModes.has(mode) && error && (
             <div className="p-4 bg-red-900/20 rounded-lg">
               <p className="text-sm text-red-400">{error}</p>
               <button
@@ -350,13 +378,13 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
             </div>
           )}
 
-          {!isLoading && !error && currentExplanation && (
+          {!loadingModes.has(mode) && !error && currentExplanation && (
             <div className="p-4 bg-[--color-background] rounded-lg text-sm text-[--color-text-secondary] whitespace-pre-wrap leading-relaxed">
               {currentExplanation}
             </div>
           )}
 
-          {!isLoading && !error && !currentExplanation && (
+          {!loadingModes.has(mode) && !error && !currentExplanation && (
             <div className="flex items-center justify-center h-full p-8">
               <button
                 onClick={() => fetchExplanation(mode)}

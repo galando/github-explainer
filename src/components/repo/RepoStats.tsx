@@ -136,7 +136,7 @@ export function RepoStats({ repo, analysis, treeStats, contributorsCount }: Repo
           {[
             { icon: <FileIcon />, value: treeStats.files, label: 'Files' },
             { icon: <FolderIcon />, value: treeStats.folders, label: 'Folders' },
-            { icon: <PackageIcon />, value: 0, label: 'Dependencies' },
+            { icon: <PackageIcon />, value: analysis?.dependencies?.total ?? 0, label: 'Dependencies' },
           ].map(stat => (
             <div key={stat.label} className="flex flex-col items-center gap-1 py-3 bg-[--color-background] rounded-lg">
               {stat.icon}
