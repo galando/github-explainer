@@ -12,16 +12,39 @@ const CORS_HEADERS = {
 
 // System prompt variants per explanation mode
 const MODE_SYSTEM_PROMPTS: Record<string, string> = {
-  quick: `You are a senior software engineer. Given repository metadata, write a 2-3 sentence plain-English summary of what the project does and its purpose. Be concise and direct.`,
+  quick: `You are a senior software engineer. Given repository metadata, write a 2-3 sentence plain-English summary covering:
+- What the project does and who it's for
+- Main technology stack (frameworks, languages)
+- Notable characteristics (popularity, activity, architecture style)
+Be concise and direct. Avoid generic phrases.`,
 
-  beginner: `You are a friendly coding mentor. Given repository metadata, explain what this project does in simple terms that a beginner programmer can understand. Avoid jargon. Use analogies if helpful. Keep it to 3-4 short paragraphs.`,
+  beginner: `You are a friendly coding mentor. Given repository metadata, explain what this project does in simple terms that a beginner programmer can understand. Cover:
+- What problem this project solves (use real-world analogies if helpful)
+- What technologies it uses (explain acronyms)
+- How someone might use or learn from this project
+Avoid jargon. Keep it to 3-4 short paragraphs.`,
 
-  technical: `You are a senior software architect. Given repository metadata, provide a detailed technical explanation covering: 1) What the project does, 2) Key architectural decisions, 3) Main technologies and why they were chosen, 4) How data flows through the system, 5) Notable implementation details. Be specific and technical. 4-6 paragraphs.`,
+  technical: `You are a senior software architect. Given repository metadata, provide a detailed technical explanation covering:
+1. What the project does and its core purpose
+2. Key architectural decisions and patterns (mention specific patterns if detected)
+3. Main technologies and frameworks (reference versions if available)
+4. How the codebase is organized (entry points, key files)
+5. Notable implementation details (testing, CI/CD, containerization)
+Be specific and technical. 4-6 paragraphs. Reference actual file names and dependencies when relevant.`,
 
-  architect: `You are a software architect reviewing a codebase. Given repository metadata, analyze: 1) Architectural patterns and design decisions, 2) Trade-offs and potential limitations, 3) How the codebase scales, 4) Key abstractions and module boundaries, 5) What makes this architecture notable or unusual. 4-6 paragraphs.`,
+  architect: `You are a software architect reviewing a codebase. Given repository metadata, analyze:
+1. Architectural patterns employed (monorepo, microservices, layered, etc.)
+2. Technology choices and their trade-offs
+3. Code organization and module boundaries
+4. DevOps maturity (CI/CD, containerization, testing)
+5. Scalability considerations and potential limitations
+6. What makes this architecture notable or unusual
+Be specific about design decisions. 4-6 paragraphs.`,
 
-  question: `You are a helpful senior developer with deep knowledge of open-source software. Answer the user's specific question about the repository based on the provided metadata. Be direct and practical. If you're not certain about something, say so.`,
+  question: `You are a helpful senior developer. Answer the user's question about the repository using ONLY the provided metadata. Be direct and practical. If the metadata doesn't contain enough information to answer confidently, say so rather than speculating. Do not reference specific files or patterns unless they appear in the provided context.`,
 }
+
+const VALID_MODES = ['quick', 'beginner', 'technical', 'architect', 'question', 'readme']
 
 interface RequestBody {
   type: 'explanation' | 'question'
@@ -56,6 +79,8 @@ ${content}
 Please provide a ${context?.mode ?? 'quick'} explanation of this repository.`
 }
 
+const GROQ_TIMEOUT_MS = 12000 // 12 seconds
+
 async function callGroq(
   systemPrompt: string,
   userPrompt: string,
@@ -64,31 +89,53 @@ async function callGroq(
   const apiKey = Deno.env.get('GROQ_API_KEY')
   if (!apiKey) throw new Error('GROQ_API_KEY not configured')
 
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 1024,
-      top_p: 0.9,
-    }),
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS)
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(`Groq API error ${response.status}: ${JSON.stringify(err)}`)
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+        temperature: 0.4,
+        max_tokens: 1024,
+        top_p: 0.9,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      // Log full error server-side only
+      console.error('Groq API error:', response.status, err)
+      // Return sanitized error to client
+      throw new Error(`AI service error (${response.status})`)
+    }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content || content.trim().length === 0) {
+      throw new Error('Empty response from AI model')
+    }
+
+    return content
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('AI request timed out')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
   }
-
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content ?? ''
 }
 
 serve(async (req: Request) => {
@@ -115,6 +162,11 @@ serve(async (req: Request) => {
     }
 
     const mode = body.context?.mode ?? (body.type === 'question' ? 'question' : 'quick')
+
+    // Validate mode and log if falling back
+    if (!VALID_MODES.includes(mode)) {
+      console.warn(`Unknown mode "${mode}", falling back to quick`)
+    }
     const systemPrompt = MODE_SYSTEM_PROMPTS[mode] ?? MODE_SYSTEM_PROMPTS.quick
     const userPrompt = buildUserPrompt(body)
 
