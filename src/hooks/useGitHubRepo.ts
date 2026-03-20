@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import { githubService, GitHubRepo, GitHubTreeItem, GitHubContributor, GitHubCommit, WeeklyCommitStat } from '@/services/github'
 
+export interface ManifestContent {
+  path: string
+  content: string
+}
+
 export interface RepoData {
   repo: GitHubRepo
   tree: GitHubTreeItem[]
@@ -9,6 +14,7 @@ export interface RepoData {
   commits: GitHubCommit[]
   readme: string | null
   commitActivity: WeeklyCommitStat[] | null
+  manifestFiles: ManifestContent[]
 }
 
 interface UseGitHubRepoResult {
@@ -32,8 +38,9 @@ function readCache(owner: string, repoName: string): RepoData | null {
       localStorage.removeItem(cacheKey(owner, repoName))
       return null
     }
-    // Backward-compat: old cached entries may lack commitActivity
+    // Backward-compat: old cached entries may lack commitActivity or manifestFiles
     if (!('commitActivity' in data)) data.commitActivity = null
+    if (!('manifestFiles' in data)) data.manifestFiles = []
     return data
   } catch {
     return null
@@ -70,6 +77,13 @@ export function useGitHubRepo(owner: string, repoName: string): UseGitHubRepoRes
       setIsLoading(true)
       setError(null)
 
+      // Manifest file patterns to fetch (priority order)
+      const MANIFEST_PATTERNS = [
+        'package.json', 'requirements.txt', 'pyproject.toml',
+        'Cargo.toml', 'go.mod', 'pom.xml', 'build.gradle',
+        'build.gradle.kts', 'Gemfile', 'composer.json', 'pubspec.yaml',
+      ]
+
       try {
         const [repo, tree, languages, contributors, commits, readme, commitActivity] = await Promise.allSettled([
           githubService.getRepo(owner, repoName),
@@ -91,14 +105,39 @@ export function useGitHubRepo(owner: string, repoName: string): UseGitHubRepoRes
           throw new Error(`Repository not found: ${owner}/${repoName}`)
         }
 
+        const treeData = tree.status === 'fulfilled' ? tree.value : []
+
+        // Fetch manifest file contents
+        const manifestFiles: ManifestContent[] = []
+        const existingManifests = MANIFEST_PATTERNS.filter(p =>
+          treeData.some(f => f.path === p)
+        )
+
+        if (existingManifests.length > 0) {
+          const contents = await Promise.allSettled(
+            existingManifests.map(async path => {
+              const content = await githubService.getFileContent(owner, repoName, path)
+              return content ? { path, content } : null
+            })
+          )
+          if (cancelled) return
+          manifestFiles.push(
+            ...contents
+              .filter((r): r is PromiseFulfilledResult<ManifestContent | null> => r.status === 'fulfilled')
+              .map(r => r.value)
+              .filter((v): v is ManifestContent => v !== null)
+          )
+        }
+
         const result: RepoData = {
           repo: repo.value,
-          tree: tree.status === 'fulfilled' ? tree.value : [],
+          tree: treeData,
           languages: languages.status === 'fulfilled' ? languages.value : {},
           contributors: contributors.status === 'fulfilled' ? contributors.value : [],
           commits: commits.status === 'fulfilled' ? commits.value : [],
           readme: readme.status === 'fulfilled' ? readme.value : null,
           commitActivity: commitActivity.status === 'fulfilled' ? commitActivity.value : null,
+          manifestFiles,
         }
 
         setData(result)

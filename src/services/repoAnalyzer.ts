@@ -1,4 +1,5 @@
 import { RepoData } from '@/hooks/useGitHubRepo'
+import { parseManifest, categorizeDependencies, Dependency, ParsedManifest } from './dependencyParser'
 
 export interface TechItem {
   name: string
@@ -19,6 +20,13 @@ export interface EntryPoint {
   type: 'main' | 'config' | 'test' | 'docs' | 'ci'
 }
 
+export interface DependencyInfo {
+  production: Dependency[]
+  development: Dependency[]
+  total: number
+  byCategory: Record<string, number>
+}
+
 export interface RepoAnalysis {
   techStack: TechItem[]
   architecture: ArchitecturePattern[]
@@ -30,6 +38,9 @@ export interface RepoAnalysis {
   complexity: 'simple' | 'moderate' | 'complex'
   primaryLanguage: string | null
   languageBreakdown: { language: string; percentage: number; bytes: number }[]
+  dependencies: DependencyInfo | null
+  scripts: Record<string, string> | null
+  parsedManifests: ParsedManifest[]
 }
 
 // --- Detection helpers ---
@@ -152,6 +163,117 @@ function detectFrameworks(tree: { path: string; type: string }[]): TechItem[] {
   // GitHub Actions
   if (files.some(f => f.startsWith('.github/workflows/'))) {
     items.push({ name: 'GitHub Actions', category: 'tool', confidence: 'high' })
+  }
+
+  return items
+}
+
+// Enhanced framework detection using parsed dependencies
+function enhanceFrameworkDetection(
+  fileBasedItems: TechItem[],
+  dependencies: Dependency[] | null
+): TechItem[] {
+  const items = [...fileBasedItems]
+  const existingNames = new Set(items.map(i => i.name.toLowerCase()))
+
+  if (!dependencies || dependencies.length === 0) {
+    return items
+  }
+
+  const depNames = new Set(dependencies.map(d => d.name.toLowerCase()))
+
+  // Framework detection from dependencies (higher confidence)
+  const frameworkChecks: [string, string, 'framework' | 'library' | 'tool'][] = [
+    // Frontend frameworks
+    ['react', 'React', 'framework'],
+    ['react-dom', 'React', 'framework'],
+    ['next', 'Next.js', 'framework'],
+    ['nuxt', 'Nuxt.js', 'framework'],
+    ['vue', 'Vue.js', 'framework'],
+    ['@angular/core', 'Angular', 'framework'],
+    ['svelte', 'Svelte', 'framework'],
+    ['sveltekit', 'SvelteKit', 'framework'],
+    ['astro', 'Astro', 'framework'],
+    ['@remix-run/react', 'Remix', 'framework'],
+    ['gatsby', 'Gatsby', 'framework'],
+    ['solid-js', 'SolidJS', 'framework'],
+
+    // Backend frameworks
+    ['express', 'Express', 'framework'],
+    ['fastify', 'Fastify', 'framework'],
+    ['koa', 'Koa', 'framework'],
+    ['@nestjs/core', 'NestJS', 'framework'],
+    ['hapi', 'Hapi', 'framework'],
+    ['django', 'Django', 'framework'],
+    ['flask', 'Flask', 'framework'],
+    ['fastapi', 'FastAPI', 'framework'],
+    ['tornado', 'Tornado', 'framework'],
+    ['spring-boot-starter-web', 'Spring Boot', 'framework'],
+    ['gin', 'Gin', 'framework'],
+    ['echo', 'Echo', 'framework'],
+    ['fiber', 'Fiber', 'framework'],
+    ['actix-web', 'Actix Web', 'framework'],
+    ['rocket', 'Rocket', 'framework'],
+    ['rails', 'Ruby on Rails', 'framework'],
+    ['sinatra', 'Sinatra', 'framework'],
+    ['laravel/framework', 'Laravel', 'framework'],
+    ['symfony', 'Symfony', 'framework'],
+
+    // Testing frameworks
+    ['jest', 'Jest', 'testing'],
+    ['vitest', 'Vitest', 'testing'],
+    ['cypress', 'Cypress', 'testing'],
+    ['@playwright/test', 'Playwright', 'testing'],
+    ['mocha', 'Mocha', 'testing'],
+    ['pytest', 'pytest', 'testing'],
+    ['rspec', 'RSpec', 'testing'],
+
+    // Build tools
+    ['vite', 'Vite', 'tool'],
+    ['webpack', 'Webpack', 'tool'],
+    ['esbuild', 'esbuild', 'tool'],
+    ['rollup', 'Rollup', 'tool'],
+    ['turbo', 'Turborepo', 'tool'],
+    ['@nx/workspace', 'Nx', 'tool'],
+
+    // CSS frameworks
+    ['tailwindcss', 'TailwindCSS', 'library'],
+    ['@tailwindcss/vite', 'TailwindCSS', 'library'],
+    ['bootstrap', 'Bootstrap', 'library'],
+    ['@mui/material', 'Material UI', 'library'],
+    ['antd', 'Ant Design', 'library'],
+    ['chakra-ui/react', 'Chakra UI', 'library'],
+
+    // State management
+    ['redux', 'Redux', 'library'],
+    ['zustand', 'Zustand', 'library'],
+    ['jotai', 'Jotai', 'library'],
+    ['recoil', 'Recoil', 'library'],
+    ['mobx', 'MobX', 'library'],
+
+    // Data fetching
+    ['@tanstack/react-query', 'TanStack Query', 'library'],
+    ['swr', 'SWR', 'library'],
+    ['axios', 'Axios', 'library'],
+
+    // Databases
+    ['prisma', 'Prisma', 'tool'],
+    ['@prisma/client', 'Prisma', 'tool'],
+    ['mongoose', 'Mongoose', 'tool'],
+    ['typeorm', 'TypeORM', 'tool'],
+    ['sequelize', 'Sequelize', 'tool'],
+    ['drizzle-orm', 'Drizzle ORM', 'tool'],
+  ]
+
+  for (const [depName, displayName, category] of frameworkChecks) {
+    if (depNames.has(depName) && !existingNames.has(displayName.toLowerCase())) {
+      items.push({
+        name: displayName,
+        category,
+        confidence: 'high',
+      })
+      existingNames.add(displayName.toLowerCase())
+    }
   }
 
   return items
@@ -440,7 +562,7 @@ function computeLanguageBreakdown(
 // --- Main export ---
 
 export function analyzeRepository(repoData: RepoData): RepoAnalysis {
-  const { tree, languages, repo } = repoData
+  const { tree, languages, repo, manifestFiles } = repoData
 
   const langBreakdown = computeLanguageBreakdown(languages)
   const primaryLanguage = langBreakdown[0]?.language ?? repo.language ?? null
@@ -460,6 +582,35 @@ export function analyzeRepository(repoData: RepoData): RepoAnalysis {
   const keyFiles = detectKeyFiles(tree)
   const entryPoints = detectEntryPoints(tree)
   const complexity = calculateComplexity(tree, languages)
+
+  // Parse manifest files if available (do this early to enhance detection)
+  let dependencies: DependencyInfo | null = null
+  let scripts: Record<string, string> | null = null
+  const parsedManifests: ParsedManifest[] = []
+
+  if (manifestFiles?.length) {
+    const parsed = manifestFiles
+      .map(m => parseManifest(m.path, m.content))
+      .filter(Boolean) as ParsedManifest[]
+
+    parsedManifests.push(...parsed)
+
+    if (parsed.length > 0) {
+      const allDeps = parsed.flatMap(p => p.dependencies)
+      dependencies = {
+        production: allDeps.filter(d => !d.isDev),
+        development: allDeps.filter(d => d.isDev),
+        total: allDeps.length,
+        byCategory: categorizeDependencies(allDeps),
+      }
+      // Get scripts from first manifest that has them
+      scripts = parsed.find(p => p.scripts && Object.keys(p.scripts).length > 0)?.scripts || null
+    }
+  }
+
+  // Enhance framework detection with parsed dependencies
+  const allDeps = dependencies ? [...dependencies.production, ...dependencies.development] : null
+  const enhancedFrameworkItems = enhanceFrameworkDetection(frameworkItems, allDeps)
 
   // Add testing tools to tech stack
   const techFromTesting: TechItem[] = testingFrameworks.map(t => ({
@@ -483,7 +634,7 @@ export function analyzeRepository(repoData: RepoData): RepoAnalysis {
   // Deduplicate
   const allTech = [
     ...techFromLanguages,
-    ...frameworkItems,
+    ...enhancedFrameworkItems,
     ...pmTech,
     ...techFromTesting,
     ...techFromCI,
@@ -506,5 +657,8 @@ export function analyzeRepository(repoData: RepoData): RepoAnalysis {
     complexity,
     primaryLanguage,
     languageBreakdown: langBreakdown,
+    dependencies,
+    scripts,
+    parsedManifests,
   }
 }
