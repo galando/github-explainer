@@ -26,11 +26,15 @@ function buildContext(repoData: RepoData, analysis: RepoAnalysis): string {
     .map(([l]) => l)
     .join(', ')
 
-  const techList = analysis.techStack
-    .filter(t => t.confidence !== 'low')
+  // Enhanced tech stack with categories
+  const frameworks = analysis.techStack
+    .filter(t => t.category === 'framework' && t.confidence !== 'low')
     .map(t => t.name)
-    .slice(0, 12)
-    .join(', ')
+    .slice(0, 6)
+  const tools = analysis.techStack
+    .filter(t => (t.category === 'tool' || t.category === 'library') && t.confidence !== 'low')
+    .map(t => t.name)
+    .slice(0, 6)
 
   const archList = analysis.architecture.map(a => a.name).join(', ')
   const fileCount = tree.filter(f => f.type === 'blob').length
@@ -40,16 +44,28 @@ function buildContext(repoData: RepoData, analysis: RepoAnalysis): string {
     .map(c => c.commit.message.split('\n')[0])
     .join('; ')
 
-  // Build dependency context
+  // Build dependency context with versions
   let depContext = ''
-  if (analysis.dependencies) {
-    const topDeps = analysis.dependencies.production
-      .slice(0, 10)
-      .map(d => d.name)
+  if (analysis.dependencies && analysis.dependencies.production.length > 0) {
+    // First try to get framework/core deps
+    let filteredDeps = analysis.dependencies.production
+      .filter(d => d.category === 'framework' || d.category === 'core')
+
+    // Fallback to top deps if filter was too restrictive
+    if (filteredDeps.length === 0) {
+      filteredDeps = analysis.dependencies.production.slice(0, 5)
+    }
+
+    const topDeps = filteredDeps
+      .slice(0, 8)
+      .map(d => d.version ? `${d.name}@${d.version}` : d.name)
       .join(', ')
-    depContext = `\nMain dependencies: ${topDeps}`
-    if (analysis.dependencies.total > 10) {
-      depContext += ` (and ${analysis.dependencies.total - 10} more)`
+
+    if (topDeps) {
+      depContext = `\nMain dependencies: ${topDeps}`
+      if (analysis.dependencies.total > 8) {
+        depContext += ` (and ${analysis.dependencies.total - 8} more)`
+      }
     }
   }
 
@@ -63,18 +79,54 @@ function buildContext(repoData: RepoData, analysis: RepoAnalysis): string {
     scriptContext = `\nNPM scripts: ${scriptList}`
   }
 
+  // CI/CD context
+  let cicdContext = ''
+  if (analysis.cicd.length > 0) {
+    cicdContext = `\nCI/CD: ${analysis.cicd.join(', ')}`
+  }
+
+  // Testing context
+  let testingContext = ''
+  if (analysis.testingFrameworks.length > 0) {
+    testingContext = `\nTesting: ${analysis.testingFrameworks.join(', ')}`
+  }
+
+  // Package manager
+  let pmContext = ''
+  if (analysis.packageManager) {
+    pmContext = `\nPackage manager: ${analysis.packageManager}`
+  }
+
+  // Check for Docker
+  const hasDocker = tree.some(f =>
+    f.path === 'Dockerfile' ||
+    f.path === 'docker-compose.yml' ||
+    f.path === 'docker-compose.yaml'
+  )
+
+  // Activity summary
+  let activityContext = ''
+  if (commits.length > 0) {
+    const lastCommitDate = new Date(commits[0].commit.author.date)
+    const daysSinceLastCommit = Math.floor((Date.now() - lastCommitDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysSinceLastCommit < 7) {
+      activityContext = `\nRecent activity: ${commits.length} commits in last check, last commit ${daysSinceLastCommit === 0 ? 'today' : `${daysSinceLastCommit} days ago`}`
+    } else if (daysSinceLastCommit < 30) {
+      activityContext = `\nRecent activity: last commit ${daysSinceLastCommit} days ago`
+    }
+  }
+
   return `
 Repository: ${repo.full_name}
 Description: ${repo.description ?? 'No description'}
-Stars: ${repo.stargazers_count.toLocaleString()}
-Language: ${repo.language ?? 'Unknown'}
-All languages: ${langList}
-Tech stack: ${techList}
-Architecture patterns: ${archList}
+Stars: ${repo.stargazers_count.toLocaleString()} | Forks: ${repo.forks_count.toLocaleString()} | Issues: ${repo.open_issues_count.toLocaleString()}
+Primary Language: ${repo.language ?? 'Unknown'}${langList !== repo.language ? ` | All languages: ${langList}` : ''}
+${frameworks.length > 0 ? `Frameworks: ${frameworks.join(', ')}` : ''}
+${tools.length > 0 ? `Tools & Libraries: ${tools.join(', ')}` : ''}
+Architecture: ${archList || 'Standard project structure'}
 File count: ${fileCount}
 Key files: ${topFiles}
-Contributors: ${contributors.length}
-Recent commits: ${recentCommits}${depContext}${scriptContext}
+Contributors: ${contributors.length}${pmContext}${cicdContext}${testingContext}${hasDocker ? '\nDocker: Yes' : ''}${activityContext}${depContext}${scriptContext}
 `.trim()
 }
 
@@ -132,6 +184,8 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
   const [copied, setCopied] = useState<'badge' | 'summary' | 'link' | null>(null)
   const [, forceRender] = useState(0)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Ref to prevent race conditions in async loading
+  const loadingRef = useRef<Set<ExplanationMode>>(new Set())
 
   const repo = repoData.repo
   const currentExplanation = explanations[mode]
@@ -155,9 +209,11 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLoad, repo.full_name])
 
-  const fetchExplanation = async (m: ExplanationMode, force = false) => {
+  const fetchExplanation = async (m: ExplanationMode) => {
     if (m === 'readme') return  // README tab is static, no fetch needed
-    if (loadingModes.has(m)) return
+    // Use ref for immediate guard to prevent race conditions
+    if (loadingRef.current.has(m)) return
+    loadingRef.current.add(m)
     setLoadingModes(prev => new Set(prev).add(m))
     setError('')
 
@@ -186,6 +242,7 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get explanation.')
     } finally {
+      loadingRef.current.delete(m)
       setLoadingModes(prev => {
         const next = new Set(prev)
         next.delete(m)
@@ -204,7 +261,9 @@ export function AIExplanation({ repoData, analysis, autoLoad = false }: AIExplan
   const refresh = () => {
     if (mode === 'readme') return
     setExplanations(prev => { const next = { ...prev }; delete next[mode]; return next })
-    fetchExplanation(mode, true)
+    // Clear the loading ref to allow refetch
+    loadingRef.current.delete(mode)
+    fetchExplanation(mode)
   }
 
   const copyBadge = async () => {

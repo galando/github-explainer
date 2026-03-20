@@ -349,12 +349,19 @@ function detectArchitecture(
   const files = tree.map(f => f.path)
   const dirs = tree.filter(f => f.type === 'tree').map(f => f.path)
 
-  // Monorepo
-  if (hasFile(tree, 'lerna.json', 'nx.json', 'turbo.json', 'pnpm-workspace.yaml', 'rush.json')) {
+  // Monorepo detection with tool identification
+  const monorepoTools: string[] = []
+  if (hasFile(tree, 'pnpm-workspace.yaml')) monorepoTools.push('pnpm')
+  if (hasFile(tree, 'nx.json')) monorepoTools.push('Nx')
+  if (hasFile(tree, 'turbo.json')) monorepoTools.push('Turborepo')
+  if (hasFile(tree, 'lerna.json')) monorepoTools.push('Lerna')
+  if (hasFile(tree, 'rush.json')) monorepoTools.push('Rush')
+
+  if (monorepoTools.length > 0) {
     patterns.push({
       name: 'Monorepo',
-      description: 'Multiple packages managed in a single repository',
-      evidence: ['lerna.json / nx.json / turbo.json detected'],
+      description: `Multiple packages managed using ${monorepoTools.join(', ')}`,
+      evidence: monorepoTools.map(t => `${t} workspace config detected`),
     })
   }
 
@@ -431,6 +438,49 @@ function detectArchitecture(
       name: 'Library / Package',
       description: 'Reusable code package meant to be imported by other projects',
       evidence: ['index file at root, no app entry point'],
+    })
+  }
+
+  // Next.js App Router (Next.js 13+)
+  const hasNextJsAppDir = dirs.some(d => d === 'app' || d.startsWith('app/'))
+  const hasNextJsPageFiles = files.some(f => /app\/.*page\.(tsx|ts|jsx|js)$/.test(f))
+  const hasNextConfig = hasFile(tree, 'next.config.js', 'next.config.ts', 'next.config.mjs')
+  if (hasNextConfig && hasNextJsAppDir && hasNextJsPageFiles) {
+    patterns.push({
+      name: 'Next.js App Router',
+      description: 'Modern Next.js using the App Router with React Server Components',
+      evidence: ['app/ directory with page.tsx files detected'],
+    })
+  } else if (hasNextConfig && hasFile(tree, 'pages/index.tsx', 'pages/index.js', 'pages/_app.tsx', 'pages/_app.js')) {
+    patterns.push({
+      name: 'Next.js Pages Router',
+      description: 'Next.js using the traditional Pages Router',
+      evidence: ['pages/ directory with Next.js entry files detected'],
+    })
+  }
+
+  // Serverless / Edge - detect platforms once to avoid duplicate hasFile calls
+  const serverlessPlatforms: [string, boolean][] = [
+    ['AWS Lambda', hasFile(tree, 'serverless.yml', 'serverless.ts')],
+    ['Vercel', hasFile(tree, 'vercel.json')],
+    ['Netlify', hasFile(tree, 'netlify.toml', 'netlify.json')],
+  ]
+  const detectedPlatforms = serverlessPlatforms.filter(([, detected]) => detected).map(([name]) => name)
+
+  if (detectedPlatforms.length > 0) {
+    patterns.push({
+      name: 'Serverless',
+      description: `Serverless deployment on ${detectedPlatforms.join(', ')}`,
+      evidence: detectedPlatforms.map(p => `${p} config detected`),
+    })
+  }
+
+  // Docker / Containerized
+  if (hasFile(tree, 'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml')) {
+    patterns.push({
+      name: 'Containerized',
+      description: 'Application packaged with Docker containers',
+      evidence: ['Dockerfile or docker-compose detected'],
     })
   }
 
