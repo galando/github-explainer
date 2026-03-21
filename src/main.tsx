@@ -16,11 +16,12 @@ if (GA_MEASUREMENT_ID) {
   document.head.appendChild(script)
 
   window.dataLayer = window.dataLayer || []
-  function gtag(...args: unknown[]) {
+  // Expose gtag globally so analytics.ts can call it
+  window.gtag = function gtag(...args: unknown[]) {
     window.dataLayer.push(args)
   }
-  gtag('js', new Date())
-  gtag('config', GA_MEASUREMENT_ID)
+  window.gtag('js', new Date())
+  window.gtag('config', GA_MEASUREMENT_ID)
 }
 
 createRoot(document.getElementById('root')!).render(

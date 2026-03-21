@@ -1,12 +1,9 @@
 // Google Analytics 4 helper
-// GA is loaded in index.html via the gtag script tag.
-// We declare gtag here so TypeScript knows about it.
-
-declare function gtag(...args: unknown[]): void
+// GA is initialized in main.tsx and exposed on window.gtag
 
 function safeGtag(...args: unknown[]) {
-  if (typeof gtag !== 'undefined') {
-    gtag(...args)
+  if (typeof window.gtag !== 'undefined') {
+    window.gtag(...args)
   }
 }
 
