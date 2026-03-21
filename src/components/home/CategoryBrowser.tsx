@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigation } from 'react-router'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router'
 import { Code2, Brain, Globe, Settings, Database, Smartphone, Loader2 } from 'lucide-react'
 
 const CATEGORIES = [
@@ -15,12 +15,12 @@ const CATEGORIES = [
 
 export default function CategoryBrowser() {
   const [pendingCategory, setPendingCategory] = useState<string | null>(null)
-  const navigation = useNavigation()
 
-  // Clear pending state when navigation completes
-  if (navigation.state === 'idle' && pendingCategory) {
-    setPendingCategory(null)
-  }
+  // Clear pending state after navigation (component re-renders on new page)
+  useEffect(() => {
+    // Small delay to show the spinner, then clear on unmount or re-render
+    return () => setPendingCategory(null)
+  }, [])
 
   const handleClick = (slug: string) => {
     setPendingCategory(slug)
