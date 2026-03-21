@@ -246,21 +246,37 @@ class GitHubService {
     return data.items
   }
 
-  async getCommitActivity(owner: string, repo: string): Promise<WeeklyCommitStat[] | null> {
+  async getCommitActivity(owner: string, repo: string, maxRetries = 3): Promise<WeeklyCommitStat[] | null> {
     // Use raw fetch — the GitHub stats API returns 202 (empty body) while computing,
     // which breaks the shared fetch() that always calls res.json().
-    try {
-      const res = await fetch(
-        apiUrl(`/repos/${owner}/${repo}/stats/commit_activity`),
-        { headers: this.headers }
-      )
-      if (res.status === 202 || res.status === 204) return null  // still computing / empty repo
-      if (!res.ok) return null
-      const data = await res.json()
-      return Array.isArray(data) && data.length > 0 ? data : null
-    } catch {
-      return null
+    // Retry with exponential backoff when GitHub is computing stats.
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(
+          apiUrl(`/repos/${owner}/${repo}/stats/commit_activity`),
+          { headers: this.headers }
+        )
+
+        if (res.status === 202) {
+          // GitHub is computing stats - retry after delay (but not on last attempt)
+          if (attempt < maxRetries) {
+            const delay = 1000 * (attempt + 1) // 1s, 2s, 3s
+            await new Promise(resolve => setTimeout(resolve, delay))
+            continue
+          }
+          return null // Give up after max retries
+        }
+
+        if (res.status === 204) return null  // empty repo
+        if (!res.ok) return null
+
+        const data = await res.json()
+        return Array.isArray(data) && data.length > 0 ? data : null
+      } catch {
+        if (attempt === maxRetries) return null
+      }
     }
+    return null
   }
 }
 
