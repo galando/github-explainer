@@ -14,10 +14,10 @@ if (GA_MEASUREMENT_ID) {
   // Setup dataLayer and gtag BEFORE loading the script (per GA documentation)
   window.dataLayer = window.dataLayer || []
   // Use traditional function to preserve 'arguments' object (required by GA)
-  // eslint-disable-next-line prefer-rest-params, @typescript-eslint/no-explicit-any
+  // Official snippet: function gtag(){dataLayer.push(arguments);}
   window.gtag = function () {
-    // @ts-expect-error - arguments is valid in traditional functions
-    window.dataLayer.push(arguments)
+    // eslint-disable-next-line prefer-rest-params, @typescript-eslint/no-explicit-any
+    ;(window.dataLayer as any[]).push(arguments)
   }
   window.gtag('js', new Date())
   window.gtag('config', GA_MEASUREMENT_ID)
