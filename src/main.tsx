@@ -13,9 +13,11 @@ const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID
 if (GA_MEASUREMENT_ID) {
   // Setup dataLayer and gtag BEFORE loading the script (per GA documentation)
   window.dataLayer = window.dataLayer || []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  window.gtag = function gtag(...args: any[]) {
-    window.dataLayer.push(args)
+  // Use traditional function to preserve 'arguments' object (required by GA)
+  // eslint-disable-next-line prefer-rest-params, @typescript-eslint/no-explicit-any
+  window.gtag = function () {
+    // @ts-expect-error - arguments is valid in traditional functions
+    window.dataLayer.push(arguments)
   }
   window.gtag('js', new Date())
   window.gtag('config', GA_MEASUREMENT_ID)
